@@ -34,21 +34,34 @@ trait Monad[M[_]] extends Functor[M] {
   def map2[A,B,C](ma: M[A], mb: M[B])(f: (A, B) => C): M[C] =
     flatMap(ma)(a => map(mb)(b => f(a, b)))
 
-  def sequence[A](lma: List[M[A]]): M[List[A]] = ???
+  def sequence[A](lma: List[M[A]]): M[List[A]] = 
+    lma.foldRight[M[List[A]]](unit(List()))((h, t) => map2(h, t)(_ :: _))
 
-  def traverse[A,B](la: List[A])(f: A => M[B]): M[List[B]] = ???
+  def traverse[A,B](la: List[A])(f: A => M[B]): M[List[B]] = 
+    la.foldLeft(unit(List[B]()))((b, a) => map2(f(a), b)(_ :: _))
 
-  def replicateM[A](n: Int, ma: M[A]): M[List[A]] = ???
+  def replicateM[A](n: Int, ma: M[A]): M[List[A]] = 
+    if (n <= 0) unit(List[A]())
+    else map2(ma, replicateM(n-1, ma))(_ :: _)
 
-  def compose[A,B,C](f: A => M[B], g: B => M[C]): A => M[C] = ???
+  def compose[A,B,C](f: A => M[B], g: B => M[C]): A => M[C] = 
+    a => flatMap(f(a))(b => g(b))
+
 
   // Implement in terms of `compose`:
-  def _flatMap[A,B](ma: M[A])(f: A => M[B]): M[B] = ???
+  def _flatMap[A,B](ma: M[A])(f: A => M[B]): M[B] = 
+    //def g = a: A => unit(a)
+    compose((a: Unit) => ma, f)(())
 
-  def join[A](mma: M[M[A]]): M[A] = ???
+  def join[A](mma: M[M[A]]): M[A] = 
+    flatMap(mma)(identity)
 
   // Implement in terms of `join`:
-  def __flatMap[A,B](ma: M[A])(f: A => M[B]): M[B] = ???
+  def __flatMap[A,B](ma: M[A])(f: A => M[B]): M[B] = 
+    join(map(ma)(f))
+
+  def _compose[A,B,C](f: A => M[B], g: B => M[C]): A => M[C] =
+    a => join(map(f(a))(g))
 }
 
 case class Reader[R, A](run: R => A)
@@ -64,11 +77,19 @@ object Monad {
 
   def parserMonad[P[+_]](p: Parsers[P]): Monad[P] = ???
 
-  val optionMonad: Monad[Option] = ???
+  val optionMonad: Monad[Option] = new Monad[Option] {
+    def unit[A](a: => A): Option[A] = Option(a)
+    def flatMap[A, B](ma: Option[A])(f: A => Option[B]): Option[B] =
+      ma flatMap f
+  }
 
   val streamMonad: Monad[Stream] = ???
 
-  val listMonad: Monad[List] = ???
+  val listMonad: Monad[List] = new Monad[List] {
+    def unit[A](a: => A): List[A] = List[A](a)
+    def flatMap[A, B](ma: List[A])(f: A => List[B]): List[B]=
+      ma flatMap f
+  }
 
   def stateMonad[S] = ???
 
